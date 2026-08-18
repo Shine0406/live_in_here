@@ -9,8 +9,8 @@ function HomePage() {
         <ul>
           <li><Link to="/profile">기본정보 페이지</Link></li>
           <li><Link to="/test">진단 페이지</Link></li>
-          <li><Link to="/result">결과 페이지</Link></li>
-          <li><Link to="/region/chuncheon">춘천 상세 페이지</Link></li>
+          <li><Link to="/result">결과 git 페이지</Link></li>
+          <li><Link to="/region/chuncheon">상세 페이지</Link></li>
         </ul>
       </nav>
     </main>
