@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useUser } from '../context/UserContext'
+import { INITIAL_PROFILE, useUser } from '../context/UserContext'
 import type { AgeGroup, JobCategory, UserProfile } from '../types/user'
+import { wasReloadedAtPath } from '../utils/navigation'
 import { isProfileComplete } from '../utils/profile'
 
 const ageOptions: Array<{ label: string; value: AgeGroup }> = [
@@ -31,11 +32,24 @@ function formatBudget(budget: number | null, flexible: boolean) {
 }
 
 function ProfilePage() {
-  const { profile, updateProfile } = useUser()
+  const { profile, isHydrated, updateProfile, resetDiagnosis, resetAllUserInput } = useUser()
   const [form, setForm] = useState<UserProfile>(profile)
   const [previousBudget, setPreviousBudget] = useState(profile.housingBudget ?? 50)
   const [error, setError] = useState('')
+  const isReload = useRef(wasReloadedAtPath('/profile'))
+  const reloadResetHandled = useRef(false)
+  const [reloadResetComplete, setReloadResetComplete] = useState(!isReload.current)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!isHydrated || !isReload.current || reloadResetHandled.current) return
+    reloadResetHandled.current = true
+    resetAllUserInput()
+    setForm({ ...INITIAL_PROFILE })
+    setPreviousBudget(INITIAL_PROFILE.housingBudget ?? 50)
+    setError('')
+    setReloadResetComplete(true)
+  }, [isHydrated, resetAllUserInput])
 
   const toggleFlexibleBudget = () => {
     if (form.housingBudgetFlexible) {
@@ -53,9 +67,12 @@ function ProfilePage() {
       return
     }
     setError('')
+    resetDiagnosis()
     updateProfile(form)
     navigate('/test')
   }
+
+  if (!isHydrated || !reloadResetComplete) return <main className="route-loading">입력 정보를 초기화하는 중...</main>
 
   return (
     <main className="profile-page">

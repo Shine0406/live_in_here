@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import { fetchPolicies, type PolicyResponse } from '../api/policy'
 import { useUser } from '../context/UserContext'
+import { getMockJobs } from '../data/mockJobs'
 import { findRegionByCode, REAL_REGIONS } from '../data/regionData'
 import { QUESTIONS, recommend, type Axis, type Vector } from '../utils/recommendation_engine'
 import { isProfileComplete, toBasicInfo } from '../utils/profile'
@@ -38,6 +39,7 @@ function RegionDetailPage() {
   const [activeTab, setActiveTab] = useState<DetailTab>('info')
   const [policyState, setPolicyState] = useState<PolicyState>({ status: 'idle' })
   const [policyRetry, setPolicyRetry] = useState(0)
+  const [selectedDemoJobId, setSelectedDemoJobId] = useState<string | null>(null)
   const policyCache = useRef(new Map<string, PolicyResponse>())
   const currentRegion = useMemo(() => findRegionByCode(id, searchParams.get('region')), [id, searchParams])
   const profileComplete = isProfileComplete(profile)
@@ -79,6 +81,7 @@ function RegionDetailPage() {
   const topAxes = getTopAxes(currentRegion.vector)
   const percent = calculation.currentMatch ? Math.round(calculation.currentMatch.similarity * 100) : null
   const reasons = getMatchReasons(userVector, currentRegion.vector)
+  const mockJobs = getMockJobs(currentRegion.region, profile.jobCategory)
 
   return (
     <main className="region-page">
@@ -127,8 +130,16 @@ function RegionDetailPage() {
 
       {activeTab === 'jobs' && <section className="region-tab-panel region-jobs-panel" role="tabpanel">
         <h2>이 지역의 일자리</h2>
-        <div className="region-jobs-summary"><small>현재 {currentRegion.region}에서 확인할</small><strong>{JOB_LABELS[profile.jobCategory] ?? profile.jobCategory} 직무 정보</strong><span>고용24 실시간 채용정보 연결 예정</span></div>
-        <article className="region-jobs-placeholder"><span>💼</span><h3>실제 채용공고를 준비하고 있어요</h3><p>현재 지역 데이터의 일자리 점수는 근사 지표이며 실제 채용공고 수가 아닙니다.</p><small>{currentRegion.jNote}</small></article>
+        <div className="region-jobs-summary"><small>현재 {currentRegion.region}에서 확인 가능한</small><strong>{mockJobs.length}건의 추천 채용공고</strong><span>희망 직무 · {JOB_LABELS[profile.jobCategory] ?? profile.jobCategory}</span><em>DEMO DATA · 시연용 채용정보</em></div>
+        {mockJobs.length === 0 ? <article className="region-jobs-placeholder"><span>💼</span><h3>이 지역의 시연용 채용공고는 준비 중이에요.</h3><p>실제 서비스에서는 고용24 채용정보를 연결할 예정입니다.</p></article> : <div className="region-job-list">
+          {mockJobs.map((job) => <article className="region-job-card" key={job.id}>
+            <div className="region-job-card-header"><strong>{job.companyName}</strong><span><em>시연용</em><b>{job.employmentType}</b></span></div>
+            <h3>{job.title}</h3>
+            <p><span>📍 {job.location}</span><span>📅 {job.deadline} 마감</span></p>
+            <button type="button" onClick={() => setSelectedDemoJobId(job.id)}>공고 자세히 보기 →</button>
+            {selectedDemoJobId === job.id && <small className="region-job-demo-notice" role="status">시연용 채용공고입니다.<br />실제 서비스에서는 고용24 채용 페이지로 연결됩니다.</small>}
+          </article>)}
+        </div>}
       </section>}
     </main>
   )

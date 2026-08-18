@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { fetchMatchReport } from '../api/matchReport'
+import mokpoImage from '../assets/mokpo.gif'
 import { useUser } from '../context/UserContext'
 import { getRegionPath, REAL_REGIONS } from '../data/regionData'
 import { QUESTIONS, recommend, type Axis, type Vector } from '../utils/recommendation_engine'
@@ -10,6 +11,7 @@ import { isProfileComplete, toBasicInfo } from '../utils/profile'
 const AXES: Axis[] = ['H', 'T', 'I', 'C', 'E', 'J']
 const AXIS_LABELS: Record<Axis, string> = { H: '주거', T: '교통', I: '생활 인프라', C: '문화', E: '자연환경', J: '일자리' }
 const AXIS_TYPE_LABELS: Record<Axis, string> = { H: '주거', T: '교통', I: '생활', C: '문화', E: '자연', J: '일자리' }
+const MOKPO_REGION_CODE = '36010'
 
 function getRegionTypeLabel(vector: Vector) {
   const topAxes = [...AXES].sort((a, b) => vector[b] - vector[a]).slice(0, 2)
@@ -98,6 +100,7 @@ function ResultPage() {
 
   const top1 = results[0]
   const top1Region = REAL_REGIONS.find((region) => region.region === top1.region)
+  const isMokpo = top1Region?.code === MOKPO_REGION_CODE
   const matchReport = generatedReport ?? fallbackReport
   if (!matchReport) return null
   return (
@@ -113,7 +116,7 @@ function ResultPage() {
           <div className="result-mascot-area">
             <span>지역 유형</span>
             <h2>{getRegionTypeLabel(top1.vector)}</h2>
-            <HouseMascot />
+            {isMokpo ? <img key={top1.region} className="result-region-image" src={mokpoImage} alt="목포시 지역 캐릭터" /> : <HouseMascot />}
           </div>
           <div className="result-summary">
             <p>{matchReport.summary}</p>
