@@ -4,7 +4,7 @@ import type { Answers, Vector } from '../utils/recommendation_engine'
 
 const STORAGE_KEY = 'yeogisallae-user'
 
-const initialProfile: UserProfile = {
+export const INITIAL_PROFILE: UserProfile = {
   ageGroup: '',
   jobCategory: '',
   housingBudget: 50,
@@ -18,6 +18,8 @@ interface UserContextValue {
   userVector: Vector | null
   isHydrated: boolean
   updateProfile: (profile: UserProfile) => void
+  resetDiagnosis: () => void
+  resetAllUserInput: () => void
   setAnswer: (questionId: string, answer: Answers[string]) => void
   setUserVector: (vector: Vector) => void
 }
@@ -30,7 +32,7 @@ interface UserState {
   userVector: Vector | null
 }
 
-const initialState: UserState = { profile: initialProfile, answers: {}, userVector: null }
+const initialState: UserState = { profile: INITIAL_PROFILE, answers: {}, userVector: null }
 
 function loadState(): UserState {
   try {
@@ -40,14 +42,14 @@ function loadState(): UserState {
     const parsed = JSON.parse(saved) as Partial<UserState> & Partial<UserProfile>
     if (parsed.profile) {
       return {
-        profile: { ...initialProfile, ...parsed.profile },
+        profile: { ...INITIAL_PROFILE, ...parsed.profile },
         answers: parsed.answers ?? {},
         userVector: parsed.userVector ?? null,
       }
     }
 
     // 이전 버전에서 UserProfile만 저장한 데이터도 그대로 복구한다.
-    return { profile: { ...initialProfile, ...parsed }, answers: {}, userVector: null }
+    return { profile: { ...INITIAL_PROFILE, ...parsed }, answers: {}, userVector: null }
   } catch {
     return initialState
   }
@@ -70,6 +72,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setState((previous) => saveState({ ...previous, profile: nextProfile }))
   }
 
+  const resetDiagnosis = () => {
+    setState((previous) => saveState({ ...previous, answers: {}, userVector: null }))
+  }
+
+  const resetAllUserInput = () => {
+    setState(() => saveState({ profile: { ...INITIAL_PROFILE }, answers: {}, userVector: null }))
+  }
+
   const setAnswer = (questionId: string, answer: Answers[string]) => {
     setState((previous) => saveState({
       ...previous,
@@ -83,7 +93,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <UserContext.Provider value={{ ...state, isHydrated, updateProfile, setAnswer, setUserVector }}>
+    <UserContext.Provider value={{ ...state, isHydrated, updateProfile, resetDiagnosis, resetAllUserInput, setAnswer, setUserVector }}>
       {children}
     </UserContext.Provider>
   )

@@ -305,6 +305,7 @@ input[type="range"]:disabled { opacity: .35; }
 .result-mascot-area { min-height: 313px; padding: 34px 20px 10px; text-align: center; background: #fff1ea; }
 .result-mascot-area > span { color: #89919d; font-size: 13px; font-weight: 800; }
 .result-mascot-area h2 { margin: 6px 0 22px; color: #24262b; font-size: 21px; letter-spacing: -.04em; }
+.result-region-image { display: block; width: 100%; max-width: 133px; height: auto; max-height: 171px; margin: 0 auto; object-fit: contain; }
 .result-summary { padding: 18px 26px 26px; text-align: center; }
 .result-summary p { margin: 0; color: #646d7b; font-size: 15px; line-height: 1.9; white-space: pre-line; }
 .result-summary small { display: block; margin-top: 8px; color: #9ba1aa; }
@@ -416,15 +417,29 @@ input[type="range"]:disabled { opacity: .35; }
 .region-policy-card > a { display: block; margin-top: 13px; color: #e76f3e; text-align: center; text-decoration: none; font-size: 11px; font-weight: 800; }
 .region-policy-scope { margin: 15px 0 0; color: #a0a6ae; font-size: 9px; line-height: 1.6; }
 .region-jobs-summary { padding: 21px 18px; background: #fff; border: 1px solid #e8e7e5; border-radius: 14px; box-shadow: 0 3px 11px rgba(39, 43, 49, .05); }
-.region-jobs-summary small, .region-jobs-summary strong, .region-jobs-summary span { display: block; }
+.region-jobs-summary small, .region-jobs-summary strong, .region-jobs-summary span, .region-jobs-summary em { display: block; }
 .region-jobs-summary small { color: #979da7; font-size: 10px; }
 .region-jobs-summary strong { margin-top: 10px; font-size: 18px; line-height: 1.4; }
 .region-jobs-summary span { margin-top: 8px; color: #b0b4bb; font-size: 9px; }
+.region-jobs-summary em { width: fit-content; margin-top: 10px; padding: 4px 7px; color: #e56d3d; background: #fff1ea; border-radius: 999px; font-size: 8px; font-style: normal; font-weight: 850; letter-spacing: .03em; }
 .region-jobs-placeholder { margin-top: 13px; padding: 30px 20px; text-align: center; background: #fff; border: 1px solid #e8e7e5; border-radius: 14px; }
 .region-jobs-placeholder > span { font-size: 28px; }
 .region-jobs-placeholder h3 { margin: 13px 0 7px; font-size: 14px; }
 .region-jobs-placeholder p { margin: 0; color: #7b838e; font-size: 11px; line-height: 1.7; }
 .region-jobs-placeholder small { display: block; margin-top: 14px; color: #a4a9b1; font-size: 9px; line-height: 1.6; }
+.region-job-list { display: grid; margin-top: 13px; gap: 10px; }
+.region-job-card { padding: 17px 16px; background: #fff; border: 1px solid #e8e7e5; border-radius: 14px; box-shadow: 0 3px 11px rgba(39, 43, 49, .05); }
+.region-job-card-header { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.region-job-card-header > strong { font-size: 12px; line-height: 1.5; }
+.region-job-card-header > span { display: flex; gap: 5px; flex-shrink: 0; }
+.region-job-card-header em, .region-job-card-header b { padding: 4px 6px; border-radius: 999px; font-size: 8px; font-style: normal; font-weight: 800; }
+.region-job-card-header em { color: #e36a39; background: #fff0e9; }
+.region-job-card-header b { color: #6f7885; background: #f1f3f5; }
+.region-job-card h3 { margin: 12px 0 10px; color: #e76f3e; font-size: 14px; line-height: 1.5; }
+.region-job-card > p { display: flex; margin: 0; gap: 6px 12px; flex-wrap: wrap; color: #9298a2; font-size: 9px; }
+.region-job-card > button { width: 100%; min-height: 36px; margin-top: 14px; color: #e66d3d; background: #faf7f4; border: 0; border-radius: 9px; font-size: 10px; font-weight: 800; cursor: pointer; }
+.region-job-card > button:hover { background: #fff0e8; }
+.region-job-demo-notice { display: block; margin-top: 10px; color: #8b929c; text-align: center; font-size: 9px; line-height: 1.6; }
 
 @media (max-width: 340px) {
   .region-overview, .region-tab-panel { padding-inline: 11px; }
