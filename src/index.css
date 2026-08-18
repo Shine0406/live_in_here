@@ -137,6 +137,7 @@ input[type="range"]:disabled { opacity: .35; }
 .report-summary h2 strong { color: #32735f; }
 .report-summary p, .report-analysis p { margin: 0; line-height: 1.9; white-space: pre-line; }
 .report-summary a { display: inline-block; margin-top: 18px; color: #32735f; font-weight: 700; text-decoration: none; }
+.report-loading { display: block; margin-top: 12px; color: #65736e; }
 .report-vector-section, .report-analysis, .rank-link-section { margin-top: 64px; }
 .report-vector-section > h2, .report-analysis h2, .rank-link-section > h2 { margin: 0 0 24px; font-size: 1.5rem; }
 .report-vector-list { display: grid; gap: 20px; margin: 0; }
@@ -160,3 +161,18 @@ input[type="range"]:disabled { opacity: .35; }
   .rank-link { grid-template-columns: 42px 1fr auto; padding: 16px; }
   .rank-link strong { font-size: .9rem; }
 }
+
+.policy-panel { min-height: 240px; }
+.policy-status { padding: 36px 20px; color: #596761; text-align: center; background: #fff; border-radius: 14px; }
+.policy-status p { margin: 0 0 10px; }
+.policy-error button { padding: 10px 16px; color: #fff; background: #32735f; border: 0; border-radius: 8px; cursor: pointer; }
+.policy-list { display: grid; gap: 16px; }
+.policy-card { padding: 24px; background: #fff; border: 1px solid #dce3df; border-radius: 14px; }
+.policy-category { display: inline-block; padding: 4px 9px; color: #28644f; background: #edf6f2; border-radius: 999px; font-size: .78rem; font-weight: 800; }
+.policy-card h3 { margin: 12px 0; }
+.policy-card > p, .policy-support p { color: #596761; line-height: 1.65; white-space: pre-line; }
+.policy-support { margin-top: 18px; padding: 14px; background: #f5f7f6; border-radius: 9px; }
+.policy-support p { margin: 6px 0 0; }
+.policy-institution { font-size: .85rem; }
+.policy-card a { display: inline-block; margin-top: 12px; color: #32735f; font-weight: 700; text-decoration: none; }
+.policy-scope { margin-top: 18px; color: #6b7772; font-size: .8rem; }

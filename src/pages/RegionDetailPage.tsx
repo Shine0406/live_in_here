@@ -1,11 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
+import { fetchPolicies, type PolicyResponse } from '../api/policy'
 import { useUser } from '../context/UserContext'
 import { findRegionByCode, REAL_REGIONS } from '../data/regionData'
 import { QUESTIONS, recommend, type Axis, type Vector } from '../utils/recommendation_engine'
 import { isProfileComplete, toBasicInfo } from '../utils/profile'
 
 type DetailTab = 'info' | 'policy' | 'jobs'
+type PolicyState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: PolicyResponse }
+  | { status: 'error' }
 
 const AXES: Axis[] = ['H', 'T', 'I', 'C', 'E', 'J']
 const AXIS_DETAILS: Record<Axis, { label: string; icon: string }> = {
@@ -42,6 +48,9 @@ function RegionDetailPage() {
   const [searchParams] = useSearchParams()
   const { profile, answers, userVector, isHydrated } = useUser()
   const [activeTab, setActiveTab] = useState<DetailTab>('info')
+  const [policyState, setPolicyState] = useState<PolicyState>({ status: 'idle' })
+  const [policyRetry, setPolicyRetry] = useState(0)
+  const policyCache = useRef(new Map<string, PolicyResponse>())
   const regionName = searchParams.get('region')
   const currentRegion = useMemo(() => findRegionByCode(id, regionName), [id, regionName])
   const profileComplete = isProfileComplete(profile)
@@ -66,6 +75,32 @@ function RegionDetailPage() {
       return { currentMatch: undefined, error: true }
     }
   }, [answers, answersComplete, currentRegion, isHydrated, profile, profileComplete, userVector])
+
+  useEffect(() => {
+    if (activeTab !== 'policy' || !currentRegion || !profile.ageGroup) return
+
+    const cacheKey = `${currentRegion.region}:${profile.ageGroup}`
+    const cached = policyCache.current.get(cacheKey)
+    if (cached) {
+      setPolicyState({ status: 'success', data: cached })
+      return
+    }
+
+    const controller = new AbortController()
+    setPolicyState({ status: 'loading' })
+    fetchPolicies(currentRegion.region, profile.ageGroup, controller.signal)
+      .then((data) => {
+        policyCache.current.set(cacheKey, data)
+        setPolicyState({ status: 'success', data })
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        console.warn('정책 정보를 불러오지 못했습니다.', error)
+        setPolicyState({ status: 'error' })
+      })
+
+    return () => controller.abort()
+  }, [activeTab, currentRegion, policyRetry, profile.ageGroup])
 
   if (!isHydrated) return <main className="route-loading">지역 정보를 불러오는 중...</main>
   if (!profileComplete) return <Navigate to="/profile" replace />
@@ -152,10 +187,40 @@ function RegionDetailPage() {
       )}
 
       {activeTab === 'policy' && (
-        <section className="detail-panel placeholder-panel" role="tabpanel">
+        <section className="detail-panel policy-panel" role="tabpanel">
           <h2>이 지역의 청년 정책</h2>
-          <p>추천 지역과 사용자 조건에 맞는 청년·주거·정착 지원정책을 연결할 예정입니다.</p>
-          <strong>정책 데이터 연결 예정</strong>
+          {policyState.status === 'idle' || policyState.status === 'loading' ? (
+            <p className="policy-status">정책 정보를 불러오는 중...</p>
+          ) : policyState.status === 'error' ? (
+            <div className="policy-status policy-error">
+              <p>정책 정보를 불러오지 못했어요.</p>
+              <button type="button" onClick={() => setPolicyRetry((value) => value + 1)}>다시 시도</button>
+            </div>
+          ) : policyState.data.policies.length === 0 ? (
+            <div className="policy-status">
+              <p>현재 조건에서 확인된 청년 정책이 없어요.</p>
+              <small>정책 정보는 광역 시·도 단위로 조회되며, 정책 등록 상황에 따라 결과가 달라질 수 있습니다.</small>
+            </div>
+          ) : (
+            <div className="policy-list">
+              {policyState.data.policies.map((policy, index) => {
+                const externalUrl = policy.applicationUrl ?? policy.referenceUrl
+                return (
+                  <article className="policy-card" key={policy.policyNo ?? `${policy.policyName}-${index}`}>
+                    {policy.category && <span className="policy-category">{policy.category}</span>}
+                    <h3>{policy.policyName}</h3>
+                    {policy.description && <p>{policy.description}</p>}
+                    {policy.support && <div className="policy-support"><strong>지원 내용</strong><p>{policy.support}</p></div>}
+                    {policy.institutionName && <p className="policy-institution">운영기관 · {policy.institutionName}</p>}
+                    {externalUrl && (
+                      <a href={externalUrl} target="_blank" rel="noopener noreferrer">신청/상세 페이지 →</a>
+                    )}
+                  </article>
+                )
+              })}
+            </div>
+          )}
+          <p className="policy-scope">※ 정책은 현재 해당 지역이 속한 광역 시·도 기준으로 조회됩니다.</p>
         </section>
       )}
 

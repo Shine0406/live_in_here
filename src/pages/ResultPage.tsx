@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
+import { fetchMatchReport } from '../api/matchReport'
 import { useUser } from '../context/UserContext'
 import { getRegionPath, REAL_REGIONS } from '../data/regionData'
 import { QUESTIONS, recommend, type Axis, type Vector } from '../utils/recommendation_engine'
-import { createFallbackMatchReport } from '../utils/matchReport'
+import { createFallbackMatchReport, type MatchReport } from '../utils/matchReport'
 import { isProfileComplete, toBasicInfo } from '../utils/profile'
 
 const AXES: Axis[] = ['H', 'T', 'I', 'C', 'E', 'J']
@@ -32,6 +33,8 @@ function UserVectorReport({ vector }: { vector: Vector }) {
 
 function ResultPage() {
   const { profile, answers, userVector, isHydrated } = useUser()
+  const [generatedReport, setGeneratedReport] = useState<MatchReport | null>(null)
+  const [reportStatus, setReportStatus] = useState<'idle' | 'loading' | 'success' | 'fallback'>('idle')
   const profileComplete = isProfileComplete(profile)
   const answersComplete = QUESTIONS.every((question) => answers[question.id])
 
@@ -52,6 +55,38 @@ function ResultPage() {
       return { recommendation: null, error: true }
     }
   }, [answers, answersComplete, isHydrated, profile, profileComplete, userVector])
+
+  const topResult = calculation?.recommendation?.results[0]
+  const fallbackReport = useMemo(() => (
+    topResult && userVector
+      ? createFallbackMatchReport(topResult.region, userVector, topResult.vector)
+      : null
+  ), [topResult, userVector])
+
+  useEffect(() => {
+    if (!topResult || !fallbackReport || !profileComplete || !answersComplete || !userVector) return
+
+    const controller = new AbortController()
+    setGeneratedReport(null)
+    setReportStatus('loading')
+    fetchMatchReport({
+      userVector,
+      region: { name: topResult.region, vector: topResult.vector },
+      basicInfo: profile,
+      matchPercent: Math.round(topResult.similarity * 100),
+    }, controller.signal)
+      .then((report) => {
+        setGeneratedReport(report)
+        setReportStatus('success')
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setReportStatus('fallback')
+        console.warn('LLM 매칭 리포트를 불러오지 못해 기본 설명을 사용합니다.', error)
+      })
+
+    return () => controller.abort()
+  }, [answersComplete, fallbackReport, profile, profileComplete, topResult, userVector])
 
   if (!isHydrated) return <main className="route-loading">저장된 정보를 불러오는 중...</main>
   if (!profileComplete) return <Navigate to="/profile" replace />
@@ -85,10 +120,8 @@ function ResultPage() {
   const top1Region = REAL_REGIONS.find((region) => region.region === top1.region)
   const top1Percent = Math.round(top1.similarity * 100)
 
-  // TODO: 생성형 AI API 연결 후 실제 LLM 응답으로 아래 두 필드를 교체한다.
-  // - summary
-  // - detail
-  const matchReport = createFallbackMatchReport(top1.region, userVector, top1.vector)
+  const matchReport = generatedReport ?? fallbackReport
+  if (!matchReport) return null
 
   return (
     <main className="result-page result-report-page">
@@ -113,6 +146,7 @@ function ResultPage() {
       <section className="report-summary" aria-labelledby="summary-title">
         <h2 id="summary-title"><strong>{top1.region}</strong>과 나의 매칭</h2>
         <p>{matchReport.summary}</p>
+        {reportStatus === 'loading' && <small className="report-loading">맞춤 설명을 생성하고 있어요...</small>}
         {top1Region?.code && <Link to={getRegionPath(top1Region)}>1위 지역 자세히 보기 →</Link>}
       </section>
 
@@ -145,7 +179,12 @@ function ResultPage() {
         </div>
       </section>
 
-      <p className="report-note">※ 현재 지역 설명 및 매칭 분석은 실제 지역 지표 기반의 임시 설명입니다. 일자리 지표는 고용24 API 연동 전 근사값을 사용합니다.</p>
+      <p className="report-note">
+        {reportStatus === 'success'
+          ? '※ 매칭 설명은 실제 지역 지표와 사용자의 정착 성향을 기반으로 AI가 생성했습니다.'
+          : '※ AI 설명을 불러오지 못했거나 생성 중이어서 실제 지역 지표 기반의 기본 설명을 표시하고 있습니다.'}
+        {' '}일자리 지표는 고용24 API 연동 전 근사값을 사용합니다.
+      </p>
       <Link className="retry-link" to="/test">답변 수정하기</Link>
     </main>
   )
