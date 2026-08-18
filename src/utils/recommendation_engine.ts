@@ -9,6 +9,23 @@
 // ------------------------------------------------------------------
 // 0. 타입 정의
 // ------------------------------------------------------------------
+import OpenAI from "openai";
+
+// Mindlogic API Gateway
+const client = new OpenAI({
+  apiKey: "여기에_MINDLOGIC_API_KEY_붙여넣기",
+  baseURL: "https://factchat-cloud.mindlogic.ai/v1/gateway",
+});
+
+// ------------------------------------------------------------------
+// 온통청년 정책 API 설정
+// ------------------------------------------------------------------
+
+const YOUTH_POLICY_API_KEY = "46caaf06-b2f9-47cb-a05f-03b79cbf69f4";
+
+const YOUTH_POLICY_API_URL =
+  "https://www.youthcenter.go.kr/go/ythip/getPlcy";
+
 export type Axis = "H" | "T" | "I" | "C" | "E" | "J";
 
 export type Vector = Record<Axis, number>; // 0~100
@@ -43,6 +60,7 @@ export interface RegionEntry {
 
 export interface MatchResult {
   region: string;
+  code?: string;
   similarity: number; // 0~1
   vector: Vector;
 }
@@ -304,6 +322,7 @@ export function matchRegions(
     const v = axes.map((a) => r.vector[a] ?? 0);
     return {
       region: r.region,
+      code: r.code,
       similarity: weightedCosineSimilarity(u, v, weights),
       vector: r.vector,
     };
@@ -427,6 +446,306 @@ export function buildReportInputs(
   });
 }
 
+// ------------------------------------------------------------------
+// 온통청년 정책 API
+// ------------------------------------------------------------------
+
+interface YouthPolicy {
+  plcyNo?: string;
+  plcyNm?: string;
+  plcyExplnCn?: string;
+  plcySprtCn?: string;
+  lclsfNm?: string;
+  mclsfNm?: string;
+
+  // 신청 링크
+  aplyUrlAddr?: string;
+  refUrlAddr1?: string;
+  refUrlAddr2?: string;
+
+  // 대상 지역 코드
+  zipCd?: string;
+}
+
+/**
+ * 추천된 지역명으로 온통청년 정책을 조회하고
+ * LLM에 넘길 문자열로 변환한다.
+ *
+ * 현재는 MVP용으로 지역명을 query에 넣어서 검색한다.
+ */
+interface YouthPolicy {
+  plcyNo?: string;
+  plcyNm?: string;
+  lclsfNm?: string;
+  mclsfNm?: string;
+  plcyExplnCn?: string;
+  plcySprtCn?: string;
+
+  sprtTrgtMinAge?: string | number;
+  sprtTrgtMaxAge?: string | number;
+  sprtTrgtAgeLmtYn?: string;
+
+  zipCd?: string;
+
+  aplyUrlAddr?: string;
+  refUrlAddr1?: string;
+}
+
+
+// 문자열/숫자를 안전하게 number로 변환
+function toNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const number = Number(value);
+
+  return Number.isNaN(number)
+    ? null
+    : number;
+}
+
+
+// 나이 조건 확인
+function isAgeEligible(
+  policy: YouthPolicy,
+  age: number
+): boolean {
+
+  const ageLimitYn =
+    String(policy.sprtTrgtAgeLmtYn ?? "")
+      .trim()
+      .toUpperCase();
+
+  const minAge =
+    toNumber(policy.sprtTrgtMinAge);
+
+  const maxAge =
+    toNumber(policy.sprtTrgtMaxAge);
+
+
+  // 연령 제한 없음
+  if (ageLimitYn === "N") {
+    return true;
+  }
+
+
+  // 연령 정보가 아예 없으면 제외
+  if (minAge === null && maxAge === null) {
+    return false;
+  }
+
+
+  if (minAge !== null && age < minAge) {
+    return false;
+  }
+
+
+  if (maxAge !== null && age > maxAge) {
+    return false;
+  }
+
+
+  return true;
+}
+
+
+/**
+ * 온통청년 정책 API
+ *
+ * regionCode = 지역코드
+ * age = 사용자 실제 나이
+ */
+export async function fetchYouthPolicyHint(
+  regionCode: string,
+  age: number,
+  limit = 5
+): Promise<string> {
+
+  console.log(
+    "🏛️ 청년정책 API 호출:",
+    regionCode,
+    "나이:",
+    age
+  );
+
+
+  const selected: YouthPolicy[] = [];
+
+  const seenPolicyNumbers =
+    new Set<string>();
+
+  let pageNum = 1;
+
+  const pageSize = 100;
+
+
+  while (selected.length < limit) {
+
+    const params =
+      new URLSearchParams({
+        apiKeyNm: YOUTH_POLICY_API_KEY,
+        pageNum: String(pageNum),
+        pageSize: String(pageSize),
+        rtnType: "json",
+        zipCd: regionCode,
+      });
+
+
+    const url =
+      `${YOUTH_POLICY_API_URL}?${params.toString()}`;
+
+
+    console.log(
+      "정책 API 요청:",
+      url.replace(
+        YOUTH_POLICY_API_KEY,
+        "API_KEY_HIDDEN"
+      )
+    );
+
+
+    const response =
+      await fetch(url);
+
+
+    if (!response.ok) {
+      throw new Error(
+        `청년정책 API HTTP 오류: ${response.status}`
+      );
+    }
+
+
+    const data = await response.json();
+
+
+    // API 자체 결과코드 검사
+    if (String(data?.resultCode) !== "200") {
+
+      throw new Error(
+        data?.resultMessage ??
+        data?.errorMsg ??
+        "온통청년 API 오류"
+      );
+
+    }
+
+
+    const result =
+      data?.result ?? {};
+
+    const paging =
+      result?.pagging ?? {};
+
+    const policies: YouthPolicy[] =
+      result?.youthPolicyList ?? [];
+
+
+    if (!policies.length) {
+      break;
+    }
+
+
+    for (const policy of policies) {
+
+      // 나이 조건
+      if (!isAgeEligible(policy, age)) {
+        continue;
+      }
+
+
+      const policyNo =
+        policy.plcyNo;
+
+
+      // 중복 제거
+      if (
+        policyNo &&
+        seenPolicyNumbers.has(policyNo)
+      ) {
+        continue;
+      }
+
+
+      if (policyNo) {
+        seenPolicyNumbers.add(policyNo);
+      }
+
+
+      selected.push(policy);
+
+
+      if (selected.length >= limit) {
+        break;
+      }
+    }
+
+
+    const totalCount =
+      Number(paging?.totCount ?? 0);
+
+
+    if (
+      pageNum * pageSize >= totalCount
+    ) {
+      break;
+    }
+
+
+    pageNum++;
+  }
+
+
+  if (selected.length === 0) {
+
+    return "사용자 조건에 해당하는 청년정책을 찾지 못했습니다.";
+
+  }
+
+
+  // LLM이 읽기 좋은 형태로 변환
+  return selected
+    .slice(0, limit)
+    .map((policy, index) => {
+
+      const name =
+        policy.plcyNm ??
+        "정책명 없음";
+
+      const category =
+        policy.lclsfNm ??
+        "";
+
+      const subCategory =
+        policy.mclsfNm ??
+        "";
+
+      const description =
+        policy.plcyExplnCn ??
+        "";
+
+      const support =
+        policy.plcySprtCn ??
+        "";
+
+      const applicationUrl =
+        policy.aplyUrlAddr ??
+        policy.refUrlAddr1 ??
+        "";
+
+
+      return `
+[정책 ${index + 1}]
+정책명: ${name}
+분야: ${category}${subCategory ? ` / ${subCategory}` : ""}
+설명: ${description}
+지원내용: ${support}
+${applicationUrl ? `링크: ${applicationUrl}` : ""}
+      `.trim();
+
+    })
+    .join("\n\n");
+}
 /**
  * 개발2가 LLM API에 그대로 넘길 프롬프트 문자열 생성.
  * 실제 API 호출(fetch 등)은 개발2 담당 — 여기선 "무엇을 프롬프트에 넣을지"만 정리.
@@ -687,6 +1006,66 @@ ${policyText}
 }`;
 }
 
+// ------------------------------------------------------------------
+// 7. Mindlogic LLM API 호출
+// ------------------------------------------------------------------
+
+export async function generateResultPageContent(
+  answers: Answers,
+  recommendOutput: RecommendOutput,
+  policyHint?: Partial<Record<string, string>>
+): Promise<ResultPageContent> {
+  const reportInputs = buildReportInputs(recommendOutput);
+
+  const prompt = buildResultPagePrompt(
+    answers,
+    reportInputs,
+    policyHint
+  );
+
+  try {
+    console.log("🤖 Mindlogic LLM 호출 중...");
+
+    const response = await client.chat.completions.create({
+      model: "gpt-5.4-nano",
+      messages: [
+        {
+          role: "system",
+          content:
+            "반드시 올바른 JSON만 출력하세요. 마크다운 코드블록은 사용하지 마세요.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
+
+    const content = response.choices[0]?.message?.content;
+
+    if (!content) {
+      throw new Error("LLM 응답이 비어 있습니다.");
+    }
+
+    console.log("✅ LLM 응답 수신");
+    console.log(content);
+
+    const cleanedContent = content
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```$/i, "")
+      .trim();
+
+    return JSON.parse(cleanedContent) as ResultPageContent;
+
+  } catch (error: any) {
+    console.error("❌ LLM API 호출 실패");
+    console.error("status:", error.status);
+    console.error("message:", error.message);
+    throw error;
+  }
+}
+
 /*
 import regionData from "./region_vectors.json"; // 개발2 산출물
 
@@ -714,4 +1093,25 @@ console.log(top3);
 const recommendResult = recommend({ answers, basicInfo, regions, priorityAxes: ["H", "E"] });
 const reportInputs = buildReportInputs(recommendResult);
 reportInputs.forEach((ri) => console.log(buildLLMPrompt(ri)));
+*/
+
+/*
+  정책 api 테스트
+  async function testYouthPolicyAPI() {
+  try {
+    const result = await fetchYouthPolicyHint(
+    "11110",
+    21
+  );
+
+    console.log("✅ 정책 API 연결 성공");
+    console.log(result);
+
+  } catch (error) {
+    console.error("❌ 정책 API 연결 실패");
+    console.error(error);
+  }
+}
+
+testYouthPolicyAPI();
 */
