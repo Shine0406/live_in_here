@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
-import { MOCK_REGIONS } from '../data/mockRegions'
+import { REAL_REGIONS } from '../data/regionData'
 import { QUESTIONS, recommend, type Axis, type Vector } from '../utils/recommendation_engine'
 import { isProfileComplete, toBasicInfo } from '../utils/profile'
 
@@ -44,7 +44,7 @@ function ResultPage() {
         recommendation: recommend({
           answers,
           basicInfo: toBasicInfo(profile),
-          regions: MOCK_REGIONS,
+          regions: REAL_REGIONS,
           priorityAxes: [],
           topN: 3,
         }),
@@ -76,7 +76,7 @@ function ResultPage() {
         <span className="service-name">여기살래?</span>
         <h1>당신에게 잘 맞는 지역을 찾았어요!</h1>
         <p>15문항 정착 성향을 바탕으로 조건에 맞는 지역 {results.length}곳을 찾았어요.</p>
-        <p className="mock-notice">※ 현재 추천 결과는 개발용 임시 지역 데이터를 사용합니다.</p>
+        <p className="mock-notice">※ 일자리(J)축은 고용24 API 연동 전이라 교통·인프라 데이터 기반 근사치를 사용합니다.</p>
       </header>
 
       <section className="user-vector" aria-labelledby="user-vector-title">
@@ -93,7 +93,7 @@ function ResultPage() {
       ) : (
         <section className="result-grid" aria-label="추천 지역 목록">
           {results.map((result, index) => {
-            const regionData = MOCK_REGIONS.find((region) => region.region === result.region)
+            const regionData = REAL_REGIONS.find((region) => region.region === result.region)
             const percent = Math.round(result.similarity * 100)
 
             return (
