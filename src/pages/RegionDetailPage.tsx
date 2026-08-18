@@ -7,40 +7,28 @@ import { QUESTIONS, recommend, type Axis, type Vector } from '../utils/recommend
 import { isProfileComplete, toBasicInfo } from '../utils/profile'
 
 type DetailTab = 'info' | 'policy' | 'jobs'
-type PolicyState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'success'; data: PolicyResponse }
-  | { status: 'error' }
+type PolicyState = { status: 'idle' } | { status: 'loading' } | { status: 'success'; data: PolicyResponse } | { status: 'error' }
 
 const AXES: Axis[] = ['H', 'T', 'I', 'C', 'E', 'J']
-const AXIS_DETAILS: Record<Axis, { label: string; icon: string }> = {
-  H: { label: '주거', icon: '🏠' },
-  T: { label: '교통', icon: '🚌' },
-  I: { label: '생활 인프라', icon: '🏥' },
-  C: { label: '문화', icon: '🎭' },
-  E: { label: '자연환경', icon: '🌳' },
-  J: { label: '일자리', icon: '💼' },
+const AXIS_DETAILS: Record<Axis, { label: string; icon: string; short: string }> = {
+  H: { label: '주거', icon: '🏠', short: '주거 여건' },
+  T: { label: '교통', icon: '🚉', short: '교통 접근성' },
+  I: { label: '생활 인프라', icon: '🏥', short: '생활 편의' },
+  C: { label: '문화', icon: '🎭', short: '문화 환경' },
+  E: { label: '자연환경', icon: '🌳', short: '자연 인접' },
+  J: { label: '일자리', icon: '💼', short: '일자리 지표' },
+}
+const JOB_LABELS: Record<string, string> = { IT: 'IT / 개발', DESIGN: '디자인', PLANNING: '기획 / 마케팅', EDUCATION: '교육', RESEARCH: '연구 / 기술', MANUFACTURING: '제조 / 생산', SERVICE: '서비스', STARTUP: '창업', OTHER: '기타' }
+
+function getTopAxes(vector: Vector, count = 3) {
+  return AXES.map((axis) => ({ axis, value: vector[axis] })).sort((a, b) => b.value - a.value).slice(0, count)
 }
 
-const JOB_LABELS: Record<string, string> = {
-  IT: 'IT/개발',
-  DESIGN: '디자인',
-  PLANNING: '기획/마케팅',
-  EDUCATION: '교육',
-  RESEARCH: '연구/기술',
-  MANUFACTURING: '제조/생산',
-  SERVICE: '서비스',
-  STARTUP: '창업',
-  OTHER: '기타',
-}
-
-function getTopRegionStrengths(vector: Vector) {
-  return AXES
-    .map((axis) => ({ axis, value: vector[axis] }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 2)
-    .map(({ axis }) => AXIS_DETAILS[axis].label)
+function getMatchReasons(userVector: Vector, regionVector: Vector) {
+  return [...AXES]
+    .sort((a, b) => Math.abs(userVector[a] - regionVector[a]) - Math.abs(userVector[b] - regionVector[b]))
+    .slice(0, 3)
+    .map((axis) => `${AXIS_DETAILS[axis].label} 성향에서 나의 점수 ${Math.round(userVector[axis])}점과 지역 점수 ${Math.round(regionVector[axis])}점의 차이가 작아 잘 맞아요.`)
 }
 
 function RegionDetailPage() {
@@ -51,26 +39,15 @@ function RegionDetailPage() {
   const [policyState, setPolicyState] = useState<PolicyState>({ status: 'idle' })
   const [policyRetry, setPolicyRetry] = useState(0)
   const policyCache = useRef(new Map<string, PolicyResponse>())
-  const regionName = searchParams.get('region')
-  const currentRegion = useMemo(() => findRegionByCode(id, regionName), [id, regionName])
+  const currentRegion = useMemo(() => findRegionByCode(id, searchParams.get('region')), [id, searchParams])
   const profileComplete = isProfileComplete(profile)
   const answersComplete = QUESTIONS.every((question) => answers[question.id])
 
   const calculation = useMemo(() => {
     if (!isHydrated || !profileComplete || !answersComplete || !userVector || !currentRegion) return null
-
     try {
-      const recommendation = recommend({
-        answers,
-        basicInfo: toBasicInfo(profile),
-        regions: REAL_REGIONS,
-        priorityAxes: [],
-        topN: REAL_REGIONS.length,
-      })
-      const currentMatch = recommendation.results.find(
-        (result) => result.region === currentRegion.region,
-      )
-      return { currentMatch, error: false }
+      const recommendation = recommend({ answers, basicInfo: toBasicInfo(profile), regions: REAL_REGIONS, priorityAxes: [], topN: REAL_REGIONS.length })
+      return { currentMatch: recommendation.results.find((result) => result.region === currentRegion.region), error: false }
     } catch {
       return { currentMatch: undefined, error: true }
     }
@@ -78,160 +55,81 @@ function RegionDetailPage() {
 
   useEffect(() => {
     if (activeTab !== 'policy' || !currentRegion || !profile.ageGroup) return
-
     const cacheKey = `${currentRegion.region}:${profile.ageGroup}`
     const cached = policyCache.current.get(cacheKey)
-    if (cached) {
-      setPolicyState({ status: 'success', data: cached })
-      return
-    }
-
+    if (cached) { setPolicyState({ status: 'success', data: cached }); return }
     const controller = new AbortController()
     setPolicyState({ status: 'loading' })
     fetchPolicies(currentRegion.region, profile.ageGroup, controller.signal)
-      .then((data) => {
-        policyCache.current.set(cacheKey, data)
-        setPolicyState({ status: 'success', data })
-      })
+      .then((data) => { policyCache.current.set(cacheKey, data); setPolicyState({ status: 'success', data }) })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return
         console.warn('정책 정보를 불러오지 못했습니다.', error)
         setPolicyState({ status: 'error' })
       })
-
     return () => controller.abort()
   }, [activeTab, currentRegion, policyRetry, profile.ageGroup])
 
   if (!isHydrated) return <main className="route-loading">지역 정보를 불러오는 중...</main>
   if (!profileComplete) return <Navigate to="/profile" replace />
   if (!answersComplete || !userVector) return <Navigate to="/test" replace />
+  if (!currentRegion) return <main className="region-page region-message"><h1>지역 정보를 찾을 수 없어요.</h1><Link className="link-button" to="/result">추천 결과로 돌아가기</Link></main>
+  if (!calculation || calculation.error) return <main className="region-page region-message"><h1>지역 정보를 계산하지 못했어요.</h1><Link className="link-button" to="/result">추천 결과로 돌아가기</Link></main>
 
-  if (!currentRegion) {
-    return (
-      <main className="region-page region-message">
-        <h1>지역 정보를 찾을 수 없어요.</h1>
-        <p>추천 결과에서 지역을 다시 선택해주세요.</p>
-        <Link className="link-button" to="/result">추천 결과로 돌아가기</Link>
-      </main>
-    )
-  }
-
-  if (!calculation || calculation.error) {
-    return (
-      <main className="region-page region-message">
-        <h1>지역 정보를 계산하지 못했어요.</h1>
-        <Link className="link-button" to="/result">추천 결과로 돌아가기</Link>
-      </main>
-    )
-  }
-
-  const strengths = getTopRegionStrengths(currentRegion.vector)
-  const percent = calculation.currentMatch
-    ? Math.round(calculation.currentMatch.similarity * 100)
-    : null
+  const topAxes = getTopAxes(currentRegion.vector)
+  const percent = calculation.currentMatch ? Math.round(calculation.currentMatch.similarity * 100) : null
+  const reasons = getMatchReasons(userVector, currentRegion.vector)
 
   return (
     <main className="region-page">
-      <Link className="back-link" to="/result">← 추천 결과로</Link>
-
-      <header className="region-header">
-        <span className="service-name">여기살래?</span>
+      <section className="region-overview">
+        <Link className="region-back-link" to="/result">← 추천 결과로</Link>
+        <span className="region-service-name">여기살래?</span>
         <h1>{currentRegion.region}</h1>
-        <p className="region-strengths">주요 강점 · {strengths.join(' · ')}</p>
-      </header>
+        <div className="region-strength-badges">{topAxes.map(({ axis }) => <span key={axis}>{AXIS_DETAILS[axis].short}</span>)}</div>
 
-      <section className="region-match" aria-labelledby="match-title">
-        <h2 id="match-title">나와의 적합도</h2>
-        {percent !== null ? (
-          <>
-            <strong>{percent}%</strong>
-            <div className="similarity-bar"><span style={{ width: `${percent}%` }} /></div>
-          </>
-        ) : (
-          <div className="filtered-notice">
-            <p>현재 설정한 주거비 조건에서는 추천 대상에서 제외된 지역이에요.</p>
-            <Link to="/profile">기본정보 수정하기</Link>
-          </div>
-        )}
+        <section className="region-match-card" aria-labelledby="match-title">
+          <h2 id="match-title">나와의 적합도</h2>
+          {percent !== null ? <><strong>{percent}%</strong><div><span style={{ width: `${percent}%` }} /></div></> : <div className="region-filtered-notice"><p>현재 주거비 조건에서 추천 대상에서 제외된 지역이에요.</p><Link to="/profile">기본정보 수정하기</Link></div>}
+        </section>
+
+        <div className="region-tabs" role="tablist" aria-label="지역 상세 메뉴">
+          <button role="tab" aria-selected={activeTab === 'info'} className={activeTab === 'info' ? 'active' : ''} onClick={() => setActiveTab('info')}>지역 정보</button>
+          <button role="tab" aria-selected={activeTab === 'policy'} className={activeTab === 'policy' ? 'active' : ''} onClick={() => setActiveTab('policy')}>정책</button>
+          <button role="tab" aria-selected={activeTab === 'jobs'} className={activeTab === 'jobs' ? 'active' : ''} onClick={() => setActiveTab('jobs')}>일자리</button>
+        </div>
       </section>
 
-      <div className="detail-tabs" role="tablist" aria-label="지역 상세 메뉴">
-        <button role="tab" aria-selected={activeTab === 'info'} className={activeTab === 'info' ? 'active' : ''} onClick={() => setActiveTab('info')}>지역 정보</button>
-        <button role="tab" aria-selected={activeTab === 'policy'} className={activeTab === 'policy' ? 'active' : ''} onClick={() => setActiveTab('policy')}>정책</button>
-        <button role="tab" aria-selected={activeTab === 'jobs'} className={activeTab === 'jobs' ? 'active' : ''} onClick={() => setActiveTab('jobs')}>일자리</button>
-      </div>
+      {activeTab === 'info' && <section className="region-tab-panel" role="tabpanel">
+        <h2>이 지역의 생활 정보</h2>
+        <div className="region-info-grid">
+          {AXES.map((axis) => <article className="region-info-card" key={axis}><span aria-hidden="true">{AXIS_DETAILS[axis].icon}</span><small>{AXIS_DETAILS[axis].label}</small><strong>{axis === 'H' && currentRegion.budgetProxy !== undefined ? `${currentRegion.budgetProxy}만원` : `${Math.round(currentRegion.vector[axis])}점`}</strong><em>{axis === 'J' ? '실시간 채용 데이터 미연동' : `나의 점수 ${Math.round(userVector[axis])}점`}</em></article>)}
+        </div>
+        <h2 className="region-reasons-title">왜 나와 잘 맞을까?</h2>
+        <div className="region-reason-list">{reasons.map((reason) => <p key={reason}>{reason}</p>)}</div>
+      </section>}
 
-      {activeTab === 'info' && (
-        <section className="detail-panel" role="tabpanel">
-          <h2>지역 정보</h2>
-          <div className="region-indicators">
-            {AXES.map((axis) => (
-              <article className="region-indicator" key={axis}>
-                <span className="indicator-icon" aria-hidden="true">{AXIS_DETAILS[axis].icon}</span>
-                <div>
-                  <h3>{AXIS_DETAILS[axis].label}</h3>
-                  <p>지역 점수 <strong>{currentRegion.vector[axis]}</strong></p>
-                  <div className="comparison-values">
-                    <span>나 {Math.round(userVector[axis])}</span>
-                    <span>지역 {currentRegion.vector[axis]}</span>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-          {currentRegion.budgetProxy !== undefined && (
-            <p className="source-metric">월 주거비 기준값: {currentRegion.budgetProxy}만원</p>
-          )}
-          <p className="data-note">일자리 지표 안내: {currentRegion.jNote}</p>
-        </section>
-      )}
+      {activeTab === 'policy' && <section className="region-tab-panel region-policy-panel" role="tabpanel">
+        <h2>이 지역의 청년 정책</h2>
+        {policyState.status === 'idle' || policyState.status === 'loading' ? <p className="region-status-card">정책 정보를 불러오는 중...</p> : policyState.status === 'error' ? <div className="region-status-card"><p>정책 정보를 불러오지 못했어요.</p><button type="button" onClick={() => setPolicyRetry((value) => value + 1)}>다시 시도</button></div> : policyState.data.policies.length === 0 ? <div className="region-status-card"><p>현재 조건에서 확인된 청년 정책이 없어요.</p><small>정책 등록 상황에 따라 결과가 달라질 수 있습니다.</small></div> : <div className="region-policy-list">{policyState.data.policies.map((policy, index) => {
+          const externalUrl = policy.applicationUrl ?? policy.referenceUrl
+          return <article className="region-policy-card" key={policy.policyNo ?? `${policy.policyName}-${index}`}>
+            {policy.category && <span>{policy.category}</span>}
+            <h3>{policy.policyName}</h3>
+            {policy.description && <p>{policy.description}</p>}
+            {policy.support && <div><strong>지원 내용</strong><p>{policy.support}</p></div>}
+            {policy.institutionName && <small>운영기관 · {policy.institutionName}</small>}
+            {externalUrl && <a href={externalUrl} target="_blank" rel="noopener noreferrer">신청/상세 페이지 →</a>}
+          </article>
+        })}</div>}
+        <p className="region-policy-scope">※ 정책은 해당 지역이 속한 광역 시·도 기준으로 조회합니다.</p>
+      </section>}
 
-      {activeTab === 'policy' && (
-        <section className="detail-panel policy-panel" role="tabpanel">
-          <h2>이 지역의 청년 정책</h2>
-          {policyState.status === 'idle' || policyState.status === 'loading' ? (
-            <p className="policy-status">정책 정보를 불러오는 중...</p>
-          ) : policyState.status === 'error' ? (
-            <div className="policy-status policy-error">
-              <p>정책 정보를 불러오지 못했어요.</p>
-              <button type="button" onClick={() => setPolicyRetry((value) => value + 1)}>다시 시도</button>
-            </div>
-          ) : policyState.data.policies.length === 0 ? (
-            <div className="policy-status">
-              <p>현재 조건에서 확인된 청년 정책이 없어요.</p>
-              <small>정책 정보는 광역 시·도 단위로 조회되며, 정책 등록 상황에 따라 결과가 달라질 수 있습니다.</small>
-            </div>
-          ) : (
-            <div className="policy-list">
-              {policyState.data.policies.map((policy, index) => {
-                const externalUrl = policy.applicationUrl ?? policy.referenceUrl
-                return (
-                  <article className="policy-card" key={policy.policyNo ?? `${policy.policyName}-${index}`}>
-                    {policy.category && <span className="policy-category">{policy.category}</span>}
-                    <h3>{policy.policyName}</h3>
-                    {policy.description && <p>{policy.description}</p>}
-                    {policy.support && <div className="policy-support"><strong>지원 내용</strong><p>{policy.support}</p></div>}
-                    {policy.institutionName && <p className="policy-institution">운영기관 · {policy.institutionName}</p>}
-                    {externalUrl && (
-                      <a href={externalUrl} target="_blank" rel="noopener noreferrer">신청/상세 페이지 →</a>
-                    )}
-                  </article>
-                )
-              })}
-            </div>
-          )}
-          <p className="policy-scope">※ 정책은 현재 해당 지역이 속한 광역 시·도 기준으로 조회됩니다.</p>
-        </section>
-      )}
-
-      {activeTab === 'jobs' && (
-        <section className="detail-panel placeholder-panel" role="tabpanel">
-          <h2>이 지역의 일자리</h2>
-          <p>선택한 희망 직무와 현재 지역을 기준으로 고용24 채용정보를 연결할 예정입니다.</p>
-          <p>희망 직무: <strong>{JOB_LABELS[profile.jobCategory] ?? profile.jobCategory}</strong></p>
-          <strong>채용정보 연결 예정</strong>
-        </section>
-      )}
+      {activeTab === 'jobs' && <section className="region-tab-panel region-jobs-panel" role="tabpanel">
+        <h2>이 지역의 일자리</h2>
+        <div className="region-jobs-summary"><small>현재 {currentRegion.region}에서 확인할</small><strong>{JOB_LABELS[profile.jobCategory] ?? profile.jobCategory} 직무 정보</strong><span>고용24 실시간 채용정보 연결 예정</span></div>
+        <article className="region-jobs-placeholder"><span>💼</span><h3>실제 채용공고를 준비하고 있어요</h3><p>현재 지역 데이터의 일자리 점수는 근사 지표이며 실제 채용공고 수가 아닙니다.</p><small>{currentRegion.jNote}</small></article>
+      </section>}
     </main>
   )
 }

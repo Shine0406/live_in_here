@@ -15,7 +15,7 @@ function TestPage() {
   const currentQuestion = QUESTIONS[currentQuestionIndex]
   const selectedAnswer = answers[currentQuestion.id]
   const isLastQuestion = currentQuestionIndex === QUESTIONS.length - 1
-  const progress = ((currentQuestionIndex + 1) / QUESTIONS.length) * 100
+  const progress = QUESTIONS.length <= 1 ? 100 : Math.round((currentQuestionIndex / (QUESTIONS.length - 1)) * 100)
 
   const goForward = () => {
     if (!selectedAnswer) return
@@ -23,7 +23,6 @@ function TestPage() {
       setCurrentQuestionIndex((index) => index + 1)
       return
     }
-
     const vector = vectorizeAnswers(answers)
     setUserVector(vector)
     navigate('/result')
@@ -32,32 +31,26 @@ function TestPage() {
   return (
     <main className="test-page">
       <header className="test-header">
-        <span className="service-name">여기살래?</span>
-        <div className="test-progress-label">
-          <span>{currentQuestionIndex + 1} / {QUESTIONS.length}</span>
-          <span>{Math.round(progress)}%</span>
+        <span className="test-logo"><span aria-hidden="true">🏠</span><strong>여기살래?</strong></span>
+        <div className="test-progress-meta">
+          <span><strong>{currentQuestionIndex + 1}</strong> <em>/ {QUESTIONS.length}</em></span>
+          <span>{progress}%</span>
         </div>
-        <div className="test-progress" aria-label={`진단 진행률 ${Math.round(progress)}%`}>
-          <div className="test-progress-value" style={{ width: `${progress}%` }} />
+        <div className="test-progress-track" role="progressbar" aria-label="진단 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+          <div className="test-progress-fill" style={{ width: `${progress}%` }} />
         </div>
       </header>
 
-      <section className="question-panel" aria-labelledby="question-title">
-        <span className="question-number">{currentQuestion.id}</span>
-        <h1 id="question-title">{currentQuestion.prompt}</h1>
-        <div className="answer-list">
+      <section className="test-question-card" aria-labelledby="question-title">
+        <span className="test-question-number">{currentQuestion.id}</span>
+        <h1 className="test-question-title" id="question-title">{currentQuestion.prompt}</h1>
+        <div className="test-options">
           {currentQuestion.options.map((option) => {
             const isSelected = selectedAnswer === option.id
             return (
-              <button
-                key={option.id}
-                className={isSelected ? 'answer-card selected' : 'answer-card'}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() => setAnswer(currentQuestion.id, option.id)}
-              >
+              <button key={option.id} className={isSelected ? 'test-option test-option-selected' : 'test-option'} type="button" aria-pressed={isSelected} onClick={() => setAnswer(currentQuestion.id, option.id)}>
                 <span>{option.label}</span>
-                {isSelected && <span aria-hidden="true">✓</span>}
+                {isSelected && <span className="test-option-check" aria-hidden="true">✓</span>}
               </button>
             )
           })}
@@ -65,15 +58,8 @@ function TestPage() {
       </section>
 
       <nav className="test-navigation" aria-label="진단 문항 이동">
-        <button
-          className="previous-button"
-          type="button"
-          disabled={currentQuestionIndex === 0}
-          onClick={() => setCurrentQuestionIndex((index) => index - 1)}
-        >← 이전</button>
-        <button className="next-button" type="button" disabled={!selectedAnswer} onClick={goForward}>
-          {isLastQuestion ? '결과 보기' : '다음 →'}
-        </button>
+        <button className="test-prev-button" type="button" disabled={currentQuestionIndex === 0} onClick={() => setCurrentQuestionIndex((index) => index - 1)}>← 이전</button>
+        <button className="test-next-button" type="button" disabled={!selectedAnswer} onClick={goForward}>{isLastQuestion ? '결과 보기 →' : '다음 →'}</button>
       </nav>
     </main>
   )
