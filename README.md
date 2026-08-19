@@ -92,12 +92,12 @@ npm run dev
 
 - **일자리(J)축**: 고용24 채용정보 API가 개인회원 이용을 제한하고 있어, 현재는 교통·생활인프라 축 기반 근사치를 사용 중입니다. 향후 기관회원 전환 또는 공공데이터포털 경로로 실제 채용 데이터 연동 예정입니다.
 
-## 정착연구소 팀 (Estsoft AI Challengers 해커톤)
+## Estsoft AI Challengers 해커톤 - 정착연구소 팀 
 
 | 이름 | 역할 | 
 |---|---|
-| @jiyunoh02| 개발자
-| @kimdahee0615 | 개발자 및 디자이너
-| @leejw0132| 기획자
-| @donghun712 | 개발자
+| [@jiyunoh02](https://github.com/jiyunoh02) | 개발자
+| [@shine0406](https://github.com/shine0406) | 개발자 및 디자이너
+| [@leejw0132](https://github.com/@leejw0132) | 기획자
+| [@donghun712](https://github.com/@donghun712) | 개발자
 
